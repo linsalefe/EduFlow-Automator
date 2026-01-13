@@ -1,0 +1,14 @@
+google-genai
+openai
+
+python-dotenv
+schedule
+
+Pillow
+moviepy
+imageio-ffmpeg
+
+instagrapi
+requests
+pydantic
+tenacity

@@ -1,0 +1,67 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+pip-wheel-metadata/
+build/
+dist/
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# ===== Logs =====
+*.log
+
+# ===== VS Code =====
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+
+# ===== macOS =====
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# ===== Environment / Secrets =====
+.env
+.env.*
+!.env.example
+
+# ===== Database =====
+*.sqlite3
+*.db
+database/*.db
+database/*.sqlite3
+
+# ===== Assets gerados / temporários =====
+assets/temp/
+assets/processed/
+assets/raw/backgrounds/
+assets/raw/videos/
+assets/raw/images/
+assets/raw/audio/
+
+# Se você quiser manter a pasta mas ignorar arquivos (recomendado):
+# (crie um .gitkeep dentro das pastas)
+!.gitkeep
+
+# ===== Jupyter (se usar) =====
+.ipynb_checkpoints/
+
+# ===== Node (se algum dia usar scripts) =====
+node_modules/
