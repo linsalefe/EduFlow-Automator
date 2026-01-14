@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>EduFlow Central Template</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        /* --- RESET --- */
+        body {
+            margin: 0; padding: 0;
+            width: 1080px; height: 1080px;
+            background-color: #020617;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            position: relative;
+            color: white;
+            /* Layout Centralizado (Flexbox) */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* --- CAMADA 1: FUNDO --- */
+        .bg-image {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            object-fit: cover;
+            z-index: 1;
+            opacity: 0.5; /* Mais escuro para destacar o centro */
+            filter: grayscale(100%) contrast(120%) brightness(60%); /* P&B Tecnológico */
+            transition: transform 10s ease; /* Efeito de movimento sutil se fosse vídeo */
+        }
+
+        /* Textura Grid (Organização) */
+        .tech-grid {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%; z-index: 2;
+            background-image: 
+                linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+            background-size: 80px 80px;
+            mask-image: radial-gradient(circle, black 40%, transparent 100%); /* Foca no centro */
+        }
+
+        /* --- CAMADA 2: O CARD CENTRAL (O CORAÇÃO DA ARTE) --- */
+        .main-card {
+            position: relative;
+            z-index: 10;
+            width: 860px; /* Largura fixa para garantir margens iguais */
+            
+            /* Glassmorphism Profissional */
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(40px);
+            -webkit-backdrop-filter: blur(40px);
+            
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-top: 1px solid rgba(255, 255, 255, 0.25);
+            border-radius: 24px;
+            
+            padding: 70px 60px;
+            box-sizing: border-box;
+            text-align: center; /* Centraliza o texto */
+            
+            box-shadow: 
+                0 20px 60px rgba(0,0,0,0.6), /* Sombra profunda */
+                0 0 0 1px rgba(0,0,0,0.2);   /* Borda extra */
+                
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 35px; /* Espaçamento organizado entre elementos */
+        }
+
+        /* Detalhe de luz no topo do card */
+        .main-card::before {
+            content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+            width: 60%; height: 1px;
+            background: linear-gradient(90deg, transparent, #3B82F6, transparent);
+        }
+
+        /* --- CONTEÚDO DO CARD --- */
+
+        /* 1. Badge de Categoria (Topo) */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            padding: 8px 20px;
+            border-radius: 50px;
+            
+            font-size: 16px;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            color: #60A5FA;
+            text-transform: uppercase;
+        }
+        .status-dot {
+            width: 8px; height: 8px; background: #60A5FA; border-radius: 50%;
+            box-shadow: 0 0 8px #60A5FA;
+        }
+
+        /* 2. Headline (Manchete) */
+        .headline {
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 700;
+            line-height: 1.1;
+            color: #FFFFFF;
+            margin: 0;
+            /* Pequena sombra para descolar */
+            text-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+
+        /* Tamanhos de Fonte */
+        .text-xl { font-size: 82px; letter-spacing: -2px; }
+        .text-lg { font-size: 68px; letter-spacing: -1.5px; }
+        .text-md { font-size: 54px; letter-spacing: -1px; }
+        .text-sm { font-size: 42px; }
+
+        /* 3. Subtítulo / Descrição */
+        .description {
+            font-size: 26px;
+            line-height: 1.5;
+            color: #CBD5E1; /* Cinza azulado (Slate 300) */
+            font-weight: 400;
+            max-width: 90%;
+        }
+        .description strong { color: white; font-weight: 600; }
+
+        /* 4. Barra de Progresso / Dados (Elemento Visual de "Software") */
+        .data-viz-container {
+            width: 100%;
+            margin-top: 10px;
+            padding-top: 30px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .data-label {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: #64748B;
+        }
+
+        .fake-progress {
+            flex-grow: 1;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            margin: 0 20px;
+            position: relative;
+            overflow: hidden;
+        }
+        .progress-fill {
+            position: absolute; left: 0; top: 0; bottom: 0;
+            width: 75%; /* Valor fake */
+            background: linear-gradient(90deg, #3B82F6, #2563EB);
+        }
+
+        /* --- LOGO FLUTUANTE (TOPO) --- */
+        .brand-logo {
+            position: absolute;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 160px;
+            z-index: 20;
+            opacity: 0.9;
+        }
+
+        /* --- RODAPÉ DISCRETO --- */
+        .footer-link {
+            position: absolute;
+            bottom: 50px;
+            width: 100%;
+            text-align: center;
+            font-size: 18px;
+            letter-spacing: 0.2em;
+            color: rgba(255,255,255,0.3);
+            text-transform: uppercase;
+            z-index: 20;
+        }
+
+    </style>
+</head>
+<body>
+
+    <img src="{{ imagem_fundo }}" class="bg-image">
+    <div class="tech-grid"></div>
+
+    {% if logo_path %}
+    <img src="{{ logo_path }}" class="brand-logo">
+    {% endif %}
+
+    <div class="main-card">
+        
+        <div class="status-badge">
+            <div class="status-dot"></div>
+            <span>Insight Estratégico</span>
+        </div>
+
+        <div class="headline {{ classe_tamanho_texto }}">
+            {{ headline }}
+        </div>
+
+        {% if subheadline %}
+        <div class="description">
+            {{ subheadline }}
+        </div>
+        {% endif %}
+
+        <div class="data-viz-container">
+            <div class="data-label">Análise de Dados</div>
+            <div class="fake-progress"><div class="progress-fill"></div></div>
+            <div class="data-label" style="color: #60A5FA;">Detectado</div>
+        </div>
+
+    </div>
+
+    <div class="footer-link">eduflowia.com</div>
+
+</body>
+</html>
