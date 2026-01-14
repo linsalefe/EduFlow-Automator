@@ -172,6 +172,47 @@ class GeminiClient:
         caption = self._generate_text(prompt)
         return caption.strip()
 
+    def generate_visual_copy(self, topic: str) -> dict[str, Any]:
+        """
+        Gera copy ULTRA CURTO para design visual impactante.
+        Inspirado em Estácio, Kroton, Uninter.
+        """
+        prompt = (
+            "Você é um designer de posts para Instagram de grandes marcas educacionais.\n"
+            "Crie textos EXTREMAMENTE CURTOS e impactantes.\n\n"
+            f"Tópico: {topic}\n\n"
+            "REGRAS RÍGIDAS:\n"
+            "1. 'title': Máximo 5 palavras. SEM explicações. SEM frases completas. Apenas IMPACTO.\n"
+            "   Exemplos BONS: 'IA na Educação', 'Futuro é Agora', 'Transforme sua IES'\n"
+            "   Exemplos RUINS: 'Agentes de IA para Educação: Simplificando...'\n"
+            "2. 'subtitle': Máximo 8 palavras. Complementa o título.\n"
+            "3. 'kicker': 2-3 palavras de categoria (ex: Tecnologia & Inovação)\n"
+            "4. 'cta': 2-3 palavras (ex: Saiba mais, Fale conosco)\n"
+            "5. 'pexels_query': Termo em INGLÊS que GARANTA foto com PESSOAS (ex: 'happy university students smiling group')\n\n"
+            "Responda SOMENTE em JSON válido:\n"
+            '{\n'
+            '  "kicker": "...",\n'
+            '  "title": "...",\n'
+            '  "subtitle": "...",\n'
+            '  "cta": "...",\n'
+            '  "pexels_query": "..."\n'
+            '}'
+        )
+
+        raw = self._generate_text(prompt)
+        parsed = self._safe_json_loads(raw)
+
+        if not isinstance(parsed, dict):
+            raise RuntimeError("Gemini não retornou dict JSON para visual_copy.")
+        
+        # Valida tamanhos
+        title = parsed.get("title", "")
+        if len(title.split()) > 6:
+            logger.warning("⚠️ Título muito longo (%d palavras), truncando", len(title.split()))
+            parsed["title"] = " ".join(title.split()[:5])
+        
+        return parsed
+    
     def _safe_json_loads(self, raw: str) -> Any:
         cleaned = raw.strip()
 

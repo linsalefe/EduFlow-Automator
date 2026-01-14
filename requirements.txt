@@ -12,3 +12,6 @@ instagrapi
 requests
 pydantic
 tenacity
+
+jinja2
+playwright
