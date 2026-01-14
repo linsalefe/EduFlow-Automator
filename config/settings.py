@@ -25,6 +25,14 @@ LOGOS_DIR: Path = RAW_DIR / "logos"
 DB_DIR: Path = PROJECT_ROOT / "database"
 DB_PATH: Path = DB_DIR / "content_history.db"
 
+# PROMPTS (NOVO)
+PROMPTS_DIR: Path = PROJECT_ROOT / "prompts"
+PROMPT_SCRIPTS_VIDEO_PATH: Path = PROMPTS_DIR / "scripts_video.txt"
+PROMPT_CAPTIONS_POST_PATH: Path = PROMPTS_DIR / "captions_post.txt"
+
+# CONTENT (NOVO)
+CONTENT_LANGUAGE: str = "pt-BR"
+
 
 # -----------------------------
 # Brand (EduFlow IA)
@@ -148,3 +156,4 @@ def ensure_directories() -> None:
     LOGOS_DIR.mkdir(parents=True, exist_ok=True)
 
     DB_DIR.mkdir(parents=True, exist_ok=True)
+    PROMPTS_DIR.mkdir(parents=True, exist_ok=True)  # NOVO

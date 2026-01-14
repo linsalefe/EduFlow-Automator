@@ -117,3 +117,32 @@ class InstagramPublisher:
         except Exception as exc:
             logger.exception("❌ Falha ao publicar foto: %s", exc)
             raise
+    def publish_carousel(self, image_paths: list[Path], caption: str) -> str:
+        """
+        Publica um carrossel (álbum) no feed.
+        Retorna media_id como string.
+        """
+        if not image_paths:
+            raise ValueError("image_paths não pode ser vazio")
+        
+        # Valida que todos os arquivos existem
+        for path in image_paths:
+            if not path.exists():
+                raise FileNotFoundError(f"Imagem não encontrada: {path}")
+        
+        try:
+            self.login()
+            logger.info("📤 Publicando carrossel com %d imagens", len(image_paths))
+            
+            # Converte Path para string
+            paths_str = [str(p) for p in image_paths]
+            
+            media = self.client.album_upload(paths=paths_str, caption=caption)
+            media_id = str(media.id)
+            
+            logger.info("✅ Carrossel publicado com sucesso (media_id=%s)", media_id)
+            return media_id
+            
+        except Exception as exc:
+            logger.exception("❌ Falha ao publicar carrossel: %s", exc)
+            raise

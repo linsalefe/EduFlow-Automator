@@ -7,7 +7,10 @@ out = editor.create_post(
     title="EAD Sem Segredos!",
     subtitle="Descubra como estudar no seu ritmo sem cair em armadilhas comuns.",
     kicker="Quebrando objeções comuns sobre o ensino a distância…",
-    raw_image_path=None,  # ou "assets/raw/backgrounds/sua_foto.jpg"
+    background_query="university students studying laptop modern",
+    auto_fetch_background=True,
+    template="estacio_like",
+    add_logo=True,
 )
 
 print("Gerado:", out)

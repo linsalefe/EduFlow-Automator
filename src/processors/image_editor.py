@@ -25,9 +25,8 @@ class PostCopy:
 
 class ImageEditor:
     """
-    Templates:
-      - "estacio_like" (default): faixa superior + logo + card glass embaixo (mais premium)
-      - "minimal": parecido com o anterior (sem card pesado)
+    Templates profissionais para Instagram feed 1080x1350.
+    Design inspirado em grandes marcas educacionais (Estácio, Uninter).
     """
 
     def __init__(self) -> None:
@@ -39,10 +38,9 @@ class ImageEditor:
         title: str,
         subtitle: Optional[str] = None,
         kicker: Optional[str] = None,
-        raw_image_path: Optional[str | Path] = None,      # compat
-        background_path: Optional[str | Path] = None,     # caminho direto
-        background_query: Optional[str] = None,           # Pexels
-        auto_fetch_background: bool = True,               # Pexels
+        background_path: Optional[str | Path] = None,
+        background_query: Optional[str] = None,
+        auto_fetch_background: bool = True,
         output_path: Optional[str | Path] = None,
         add_logo: bool = True,
         template: str = "estacio_like",
@@ -51,9 +49,8 @@ class ImageEditor:
         settings.ensure_directories()
         copy = self._normalize_copy(title=title, subtitle=subtitle, kicker=kicker)
 
-        bg_source = background_path if background_path is not None else raw_image_path
         bg = self._build_background(
-            background_path=bg_source,
+            background_path=background_path,
             background_query=background_query or self._smart_query(title),
             auto_fetch=auto_fetch_background,
         )
@@ -72,87 +69,88 @@ class ImageEditor:
         return out
 
     # -----------------------
-    # Render: ESTACIO LIKE
+    # Render: ESTACIO LIKE (PROFISSIONAL)
     # -----------------------
     def _render_estacio_like(self, canvas: Image.Image, draw: ImageDraw.ImageDraw, copy: PostCopy, add_logo: bool, ig_handle: str) -> None:
         w, h = settings.POST_SIZE
         m = settings.SAFE_MARGIN
 
-        # 1) Faixa superior (branding)
-        header_h = 140
-        header = self._gradient_rgba(w, header_h, settings.GRADIENT_A, settings.GRADIENT_B, alpha=255)
-        header = Image.alpha_composite(header, Image.new("RGBA", (w, header_h), (0, 0, 0, 40)))
+        # 1) Header mais discreto e elegante (100px ao invés de 140px)
+        header_h = 100
+        header = self._gradient_rgba(w, header_h, settings.GRADIENT_A, settings.GRADIENT_B, alpha=240)
+        header = Image.alpha_composite(header, Image.new("RGBA", (w, header_h), (0, 0, 0, 30)))
         canvas.alpha_composite(header, (0, 0))
 
-        # Logo + texto na faixa
-        x = m
-        y = 22
+        # Logo + branding compacto
+        x = m - 10
+        y = 18
         if add_logo:
-            x = self._paste_logo_plain(canvas, x=x, y=y, max_size=92) + 18  # retorna x após colar
+            x = self._paste_logo_plain(canvas, x=x, y=y, max_size=70) + 16
 
-        brand_font = self._load_font(settings.FONT_EXTRABOLD, 52)
+        brand_font = self._load_font(settings.FONT_EXTRABOLD, 42)
         brand_text = "EduFlow"
         brand_bbox = draw.textbbox((0, 0), brand_text, font=brand_font)
         brand_w = brand_bbox[2] - brand_bbox[0]
 
-        self._draw_text_with_shadow(draw, (x, 40), brand_text, brand_font, settings.COLOR_WHITE, 130)
+        self._draw_text_with_shadow(draw, (x, 32), brand_text, brand_font, settings.COLOR_WHITE, 110)
 
-        ia_font = self._load_font(settings.FONT_EXTRABOLD, 52)
+        ia_font = self._load_font(settings.FONT_EXTRABOLD, 42)
         ia_text = "IA"
-        ia_x = x + brand_w + 6
-        self._draw_text_with_shadow(draw, (ia_x, 40), ia_text, ia_font, settings.COLOR_ACCENT, 130)
+        ia_x = x + brand_w + 5
+        self._draw_text_with_shadow(draw, (ia_x, 32), ia_text, ia_font, settings.COLOR_ACCENT, 110)
 
-        handle_font = self._load_font(settings.FONT_MEDIUM, 26)
-        self._draw_text_with_shadow(draw, (w - m - 240, 52), ig_handle, handle_font, "#DDE0FF", 110)
+        handle_font = self._load_font(settings.FONT_MEDIUM, 22)
+        self._draw_text_with_shadow(draw, (w - m - 200, 44), ig_handle, handle_font, "#DDE0FF", 90)
 
-        # 2) Card glass embaixo
-        card_x = m
+        # 2) Card começa MAIS CEDO (deixa foto respirar - 45% ao invés de 58%)
+        card_y = int(h * 0.45)
         card_w = w - (m * 2)
-        card_y = int(h * 0.58)
-        card_h = h - card_y - m
+        card_h = h - card_y - m - 20
 
         self._glass_card(
             canvas=canvas,
-            x=card_x,
+            x=m,
             y=card_y,
             width=card_w,
             height=card_h,
-            radius=34,
-            blur_radius=16,
-            fill_rgba=(15, 23, 42, 165),          # azul noturno translúcido
-            stroke_rgba=(129, 140, 248, 120),     # indigo stroke
+            radius=28,
+            blur_radius=14,
+            fill_rgba=(15, 23, 42, 180),
+            stroke_rgba=(129, 140, 248, 100),
             shadow=True,
         )
 
-        # 3) Texto dentro do card
-        inner_x = card_x + 44
-        inner_w = card_w - 88
+        # 3) Texto MAIS COMPACTO e elegante
+        inner_x = m + 36
+        inner_w = card_w - 72
 
-        kicker_font = self._load_font(settings.FONT_SEMIBOLD, 30)
+        # Kicker menor e discreto
+        kicker_font = self._load_font(settings.FONT_SEMIBOLD, 24)
         self._draw_wrapped_text(
             draw=draw,
             text=copy.kicker,
             font=kicker_font,
             x=inner_x,
-            y=card_y + 42,
+            y=card_y + 32,
             max_width=inner_w,
             fill=settings.COLOR_ACCENT,
-            line_spacing=8,
+            line_spacing=6,
             shadow=True,
-            shadow_alpha=120,
+            shadow_alpha=100,
         )
 
+        # Título MENOR (68px max ao invés de 92px)
         title_font = self._fit_font(
             font_path=settings.FONT_EXTRABOLD,
             text=copy.title,
             max_width=inner_w,
-            start_size=92,
-            min_size=56,
+            start_size=68,
+            min_size=44,
             max_lines=3,
         )
-        title_y = card_y + 92
+        title_y = card_y + 68
         title_lines = self._wrap_text(copy.title, title_font, inner_w)
-        title_block_h = self._measure_multiline_height(title_lines, title_font, line_spacing=12)
+        title_block_h = self._measure_multiline_height(title_lines, title_font, line_spacing=10)
 
         self._draw_wrapped_text(
             draw=draw,
@@ -162,20 +160,21 @@ class ImageEditor:
             y=title_y,
             max_width=inner_w,
             fill=settings.COLOR_WHITE,
-            line_spacing=12,
+            line_spacing=10,
             shadow=True,
-            shadow_alpha=160,
+            shadow_alpha=140,
         )
 
+        # Subtítulo MENOR e máximo 2 linhas
         sub_font = self._fit_font(
             font_path=settings.FONT_MEDIUM,
             text=copy.subtitle,
             max_width=inner_w,
-            start_size=40,
-            min_size=28,
-            max_lines=3,
+            start_size=32,
+            min_size=22,
+            max_lines=2,
         )
-        sub_y = title_y + title_block_h + 18
+        sub_y = title_y + title_block_h + 14
         self._draw_wrapped_text(
             draw=draw,
             text=copy.subtitle,
@@ -184,16 +183,16 @@ class ImageEditor:
             y=sub_y,
             max_width=inner_w,
             fill="#E7E9FF",
-            line_spacing=10,
+            line_spacing=8,
             shadow=True,
-            shadow_alpha=120,
+            shadow_alpha=100,
         )
 
         # CTA discreto
-        cta_font = self._load_font(settings.FONT_SEMIBOLD, 28)
-        cta_text = "👉 Link na bio para saber mais"
-        cta_y = card_y + card_h - 66
-        self._draw_text_with_shadow(draw, (inner_x, cta_y), cta_text, cta_font, "#F1F5FF", 140)
+        cta_font = self._load_font(settings.FONT_SEMIBOLD, 24)
+        cta_text = "👉 Saiba mais no link da bio"
+        cta_y = card_y + card_h - 54
+        self._draw_text_with_shadow(draw, (inner_x, cta_y), cta_text, cta_font, "#F1F5FF", 120)
 
     # -----------------------
     # Render: MINIMAL (fallback)
@@ -234,14 +233,94 @@ class ImageEditor:
                 files.extend(list(settings.BACKGROUNDS_DIR.glob(ext)))
         return random.choice(files) if files else None
 
+    def create_carousel(
+        self,
+        slides: list[dict],
+        background_path: Optional[str | Path] = None,
+        background_query: Optional[str] = None,
+        auto_fetch_background: bool = True,
+        output_dir: Optional[str | Path] = None,
+        basename: str = "carousel",
+        template_default: str = "estacio_like",
+        add_logo: bool = True,
+        ig_handle: str = "@eduflow.ia",
+    ) -> list[Path]:
+        """Gera múltiplas imagens para carrossel do Instagram."""
+        settings.ensure_directories()
+        
+        if not slides:
+            raise ValueError("slides não pode ser vazio")
+        
+        out_dir = Path(output_dir) if output_dir else settings.PROCESSED_DIR
+        out_dir.mkdir(parents=True, exist_ok=True)
+        
+        paths: list[Path] = []
+        
+        for i, slide in enumerate(slides, start=1):
+            template = slide.get("template", template_default)
+            kicker = slide.get("kicker", "")
+            title = slide.get("title", "")
+            subtitle = slide.get("subtitle", "")
+            
+            out_path = out_dir / f"{basename}_{i:03d}.jpg"
+            
+            path = self.create_post(
+                title=title,
+                subtitle=subtitle,
+                kicker=kicker,
+                background_path=background_path,
+                background_query=background_query,
+                auto_fetch_background=auto_fetch_background,
+                output_path=out_path,
+                add_logo=add_logo,
+                template=template,
+                ig_handle=ig_handle,
+            )
+            
+            paths.append(path)
+            logger.info("✅ Slide %d/%d gerado: %s", i, len(slides), path)
+        
+        return paths
+
     def _smart_query(self, title: str) -> str:
-        # query que tende a gerar fundos mais bonitos pro nicho de educação
-        base = "university students studying laptop campus modern"
-        if title and "EAD" in title.upper():
-            base = "online education students studying laptop home modern"
-        return base
+        """
+        Query otimizada para Pexels - busca fotos PROFISSIONAIS com PESSOAS.
+        Inspirado em contas premium (Estácio, Uninter, Kroton).
+        """
+        title_lower = title.lower()
+        
+        # Atendimento/Suporte/Chat
+        if any(word in title_lower for word in ["atendimento", "suporte", "chat", "chatbot", "whatsapp"]):
+            return "smiling customer service woman headset modern office professional"
+        
+        # Estudantes/Alunos/Matrícula
+        if any(word in title_lower for word in ["aluno", "estudante", "matrícula", "captação", "leads"]):
+            return "happy college students laptop modern campus smiling group"
+        
+        # Professores/Docentes
+        if any(word in title_lower for word in ["professor", "docente", "ensino", "aula"]):
+            return "professional teacher classroom technology smiling confident"
+        
+        # Gestão/Administração
+        if any(word in title_lower for word in ["gestão", "administração", "coordenação", "diretor"]):
+            return "professional business meeting office teamwork collaboration happy"
+        
+        # Tecnologia/IA/Digital
+        if any(word in title_lower for word in ["tecnologia", "ia", "inteligência artificial", "digital", "automação", "agente"]):
+            return "professional young person laptop technology smiling modern bright office"
+        
+        # EAD/Online/Remoto
+        if any(word in title_lower for word in ["ead", "online", "distância", "remoto", "home"]):
+            return "young professional studying laptop home modern bright smiling"
+        
+        # Fallback: universitários felizes
+        return "happy university students group laptop modern campus smiling diverse"
 
     def _build_background(self, background_path: Optional[str | Path], background_query: str, auto_fetch: bool) -> Image.Image:
+        """
+        Monta o background com overlays profissionais.
+        Resultado: foto suavizada com gradiente sutil.
+        """
         w, h = settings.POST_SIZE
 
         chosen: Optional[Path] = None
@@ -260,16 +339,21 @@ class ImageEditor:
             img = Image.open(chosen).convert("RGB")
             img = self._cover_resize(img, w, h)
 
-            # blur leve + overlays para ficar "premium"
-            img_blur = img.filter(ImageFilter.GaussianBlur(radius=4))
+            # Blur SUAVE (mantém rostos reconhecíveis)
+            img_blur = img.filter(ImageFilter.GaussianBlur(radius=3))
             base = img_blur.convert("RGBA")
 
-            base = Image.alpha_composite(base, Image.new("RGBA", (w, h), (0, 0, 0, 95)))
-            base = Image.alpha_composite(base, self._gradient_rgba(w, h, settings.GRADIENT_A, settings.GRADIENT_B, alpha=90))
+            # Overlay escuro suave (deixa foto visível)
+            base = Image.alpha_composite(base, Image.new("RGBA", (w, h), (0, 0, 0, 85)))
+            
+            # Gradiente SUTIL (não mata a foto)
+            base = Image.alpha_composite(base, self._gradient_rgba(w, h, settings.GRADIENT_A, settings.GRADIENT_B, alpha=70))
+            
+            # Highlight blob discreto
             base = Image.alpha_composite(base, self._highlight_blob(w, h))
             return base
 
-        # fallback: gradiente
+        # Fallback: gradiente puro
         base = self._gradient_rgba(w, h, settings.GRADIENT_A, settings.GRADIENT_B, alpha=255)
         base = Image.alpha_composite(base, self._highlight_blob(w, h))
         base = Image.alpha_composite(base, Image.new("RGBA", (w, h), (0, 0, 0, 35)))
@@ -349,16 +433,15 @@ class ImageEditor:
     def _save_jpeg_high(self, img: Image.Image, out: Path) -> None:
         out.parent.mkdir(parents=True, exist_ok=True)
         rgb = img.convert("RGB")
-        # subsampling=0 mantém mais nitidez em texto
         rgb.save(out, format="JPEG", quality=96, optimize=True, progressive=True, subsampling=0)
 
     # -----------------------
     # Helpers: copy / paths
     # -----------------------
     def _normalize_copy(self, title: str, subtitle: Optional[str], kicker: Optional[str]) -> PostCopy:
-        t = (title or "").strip() or "Educação que cabe na sua rotina."
-        s = (subtitle or "").strip() or "Tire dúvidas, quebre objeções e avance com clareza na sua decisão."
-        k = (kicker or "").strip() or "Quebrando objeções comuns sobre o EAD…"
+        t = (title or "").strip() or "Educação que transforma vidas"
+        s = (subtitle or "").strip() or "Tecnologia a favor da sua instituição de ensino"
+        k = (kicker or "").strip() or "Inovação & Educação"
         return PostCopy(kicker=k, title=t, subtitle=s)
 
     def _resolve_output_path(self, output_path: Optional[str | Path]) -> Path:
@@ -524,3 +607,4 @@ class ImageEditor:
         alpha = img.split()[-1]
         colored.putalpha(alpha.point(lambda p: min(255, int(p * (a / 255)))))
         return colored
+    

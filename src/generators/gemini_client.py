@@ -117,6 +117,60 @@ class GeminiClient:
         if not isinstance(parsed, dict):
             raise RuntimeError("Formato inesperado: Gemini não retornou um objeto JSON para legenda.")
         return parsed
+    
+    def generate_bullets(self, topic: str, count: int = 4) -> list[str]:
+        """
+        Gera bullets/pontos-chave sobre um tópico.
+        Útil para slides de carrossel.
+        """
+        prompt = (
+            "Você é um especialista em conteúdo educacional.\n"
+            "Gere pontos-chave (bullets) concisos e práticos.\n"
+            "Responda SOMENTE em JSON válido.\n\n"
+            f"Tópico: {topic}\n"
+            f"Quantidade de bullets: {count}\n\n"
+            "Formato de saída (array JSON):\n"
+            '["Ponto 1", "Ponto 2", "Ponto 3", ...]'
+        )
+
+        raw = self._generate_text(prompt)
+        parsed = self._safe_json_loads(raw)
+
+        if not isinstance(parsed, list):
+            raise RuntimeError("Formato inesperado: Gemini não retornou uma lista JSON para bullets.")
+        
+        return parsed[:count]  # garante o limite
+
+    def write_carousel_caption(
+        self,
+        topic: str,
+        hook: str = "",
+        bullets: Optional[list[str]] = None,
+    ) -> str:
+        """
+        Gera uma legenda otimizada para carrossel do Instagram.
+        Mais curta que post normal, foca em CTA para deslizar.
+        """
+        bullets_text = ""
+        if bullets:
+            bullets_text = "\n".join([f"- {b}" for b in bullets])
+
+        prompt = (
+            "Você é um copywriter de Instagram especializado em carrosséis.\n"
+            "Crie uma legenda CURTA e objetiva (máximo 3 parágrafos).\n"
+            "Inclua:\n"
+            "- Hook forte no início\n"
+            "- Menção aos pontos do carrossel\n"
+            "- CTA para deslizar e salvar o post\n"
+            "- 5 a 8 hashtags relevantes\n\n"
+            f"Tópico: {topic}\n"
+            f"Hook: {hook}\n"
+            f"Pontos-chave:\n{bullets_text}\n\n"
+            "Responda APENAS a legenda pronta (texto puro, sem JSON)."
+        )
+
+        caption = self._generate_text(prompt)
+        return caption.strip()
 
     def _safe_json_loads(self, raw: str) -> Any:
         cleaned = raw.strip()

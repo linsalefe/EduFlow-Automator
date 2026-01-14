@@ -1,19 +1,19 @@
+# scheduler.py
 from __future__ import annotations
 
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List, Dict
 
 import schedule
 import time
 
 from config import settings
-from database.db import insert_content_record
+from database.repository import ContentRepository, ContentRecord, compute_content_hash
 from src.generators.gemini_client import GeminiClient
-from src.generators.stock_images import PexelsImageBank
+from src.generators.pexels_client import PexelsClient
 from src.processors.image_editor import ImageEditor
-from src.processors.video_editor import create_short_video_mock
+from src.processors.video_editor import generate_mock_video
 from src.publishers.instagram_api import InstagramPublisher
 
 logger = logging.getLogger("eduflow.scheduler")
@@ -23,183 +23,114 @@ def _timestamp() -> str:
     return datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
-def _best_pexels_query(topic: str) -> str:
-    """
-    Query mais "fotografável" para banco de imagens.
-    """
-    # simplifica termos muito específicos
-    base = topic.lower()
-    if "ead" in base or "ensino a distância" in base:
-        return "student studying with laptop online learning"
-    if "matrícula" in base or "captação" in base:
-        return "college student laptop enrollment education"
-    return "education student laptop modern"
-
-
-def _get_background_image(topic: str) -> str:
-    """
-    Retorna um caminho de imagem local.
-    Usa Pexels se tiver chave; caso contrário, tenta assets/raw/base.jpg.
-    """
-    fallback = Path(settings.RAW_DIR) / "base.jpg"
-    if settings.PEXELS_API_KEY:
-        pexels = PexelsImageBank(api_key=settings.PEXELS_API_KEY)
-        query = _best_pexels_query(topic)
-        return pexels.download_first(query=query, out_dir=str(Path(settings.RAW_DIR) / "stock"))
-    if fallback.exists():
-        return fallback.as_posix()
-    # último fallback: gera fundo sólido (ImageEditor lida)
-    return fallback.as_posix()
-
-
-def _create_static_post(topic: str, auto_publish: bool = False) -> str:
+def _create_static_post(topic: str, auto_publish: bool = False) -> Path:
     settings.ensure_directories()
 
+    repo = ContentRepository()
     gemini = GeminiClient()
     editor = ImageEditor()
+    pexels = PexelsClient()
 
-    bg_path = _get_background_image(topic)
-
-    ideas = gemini.generate_topic_ideas(topic, count=1)
+    # 1) Gerar ideia
+    ideas = gemini.generate_topic_ideas(niche=topic, count=1)
     idea = ideas[0]
+    topic_text = idea.get("topic", "").strip() or "Tópico sem título"
 
-    # legenda
-    caption = gemini.write_post_caption(
-        topic=idea["topic"],
-        angle=idea.get("angle", ""),
-        hook=idea.get("hook", ""),
-        target=idea.get("target", ""),
-    )
+    # 2) Gerar legenda
+    caption_obj = gemini.write_post_caption(topic=topic_text)
+    title = (caption_obj.get("title") or topic_text).strip()
+    caption = (caption_obj.get("caption") or "").strip()
+    hashtags = caption_obj.get("hashtags") or []
 
-    # arte single (bem “institucional”)
-    title = idea["topic"]
-    subtitle = idea.get("hook", "")
-    kicker = "Educação & Carreira"
+    if isinstance(hashtags, list) and hashtags:
+        hashtags_str = " ".join([h if h.startswith("#") else f"#{h}" for h in hashtags])
+        full_caption = f"{caption}\n\n{hashtags_str}".strip()
+    else:
+        full_caption = caption
 
-    out = Path(settings.PROCESSED_DIR) / f"post_{_timestamp()}.jpg"
+    # Hash para evitar duplicatas
+    content_hash = compute_content_hash(topic=topic_text, caption=full_caption)
+    if repo.exists_by_hash(content_hash):
+        logger.warning("⚠️ Conteúdo duplicado (hash já existe). Pulando.")
+        return Path("assets/processed/duplicated.jpg")
+
+    # 3) Background Pexels
+    bg_path = pexels.get_background_for_query("university students studying laptop modern")
+
+    # 4) Gerar imagem
+    out_path = settings.PROCESSED_DIR / f"post_{_timestamp()}.jpg"
     image_path = editor.create_post(
-        image_path=bg_path,
         title=title,
-        subtitle=subtitle,
-        kicker=kicker,
-        template="educational",
-        output_path=out.as_posix(),
-        logo_path=str(settings.LOGO_PATH),
+        subtitle=idea.get("hook", ""),
+        kicker=idea.get("angle", "Educação & Carreira"),
+        background_path=bg_path,
+        output_path=out_path,
+        template="estacio_like",
+        add_logo=True,
     )
 
-    content_id = insert_content_record(
+    # 5) Salvar no DB
+    record = ContentRecord(
         content_type="post",
-        topic=idea["topic"],
-        caption=caption,
-        asset_path=image_path,
+        platform="instagram",
+        topic=topic_text,
+        caption=full_caption,
+        asset_path=str(image_path),
+        content_hash=content_hash,
+        status="rendered",
+        metadata_json=repo.to_metadata_json({"idea": idea, "caption_obj": caption_obj}),
     )
+    content_id = repo.insert(record)
     logger.info("✅ Post gerado e registrado: %s (id=%s)", image_path, content_id)
 
+    # 6) Publicar (opcional)
     if auto_publish:
         publisher = InstagramPublisher()
-        media_id = publisher.publish_photo(image_path=image_path, caption=caption)
+        media_id = publisher.publish_photo(image_path=image_path, caption=full_caption)
+        repo.mark_published(content_hash, platform_id=media_id, platform="instagram")
         logger.info("✅ Publicado no Instagram (media_id=%s)", media_id)
 
     return image_path
 
 
-def _create_carousel_post(topic: str, auto_publish: bool = False) -> List[str]:
+def _create_video_mock(topic: str) -> Path:
     settings.ensure_directories()
 
-    gemini = GeminiClient()
-    editor = ImageEditor()
-
-    bg_path = _get_background_image(topic)
-
-    ideas = gemini.generate_topic_ideas(topic, count=1)
-    idea = ideas[0]
-
-    # roteiro curtinho para virar carrossel (3 páginas)
-    # (Simples e eficiente: capa + 3 bullets + CTA)
-    title = idea["topic"]
-    hook = idea.get("hook", "Aprenda de forma prática e sem enrolação.")
-    angle = idea.get("angle", "Guia rápido")
-
-    bullets = gemini.generate_bullets(topic=title, count=4)
-
-    slides: List[Dict] = [
-        {
-            "template": "promo",
-            "kicker": angle,
-            "title": "EAD Sem Segredos",
-            "subtitle": hook,
-            "cta": "SALVE ESTE POST",
-        },
-        {
-            "template": "educational",
-            "kicker": "Pontos-chave",
-            "title": "O que ninguém te conta:",
-            "bullets": bullets,
-        },
-        {
-            "template": "promo",
-            "kicker": "Próximo passo",
-            "title": "Quer ajuda pra escolher o curso?",
-            "subtitle": "Comenta “EAD” ou chama no direct.",
-            "cta": "LINK NA BIO",
-        },
-    ]
-
-    base = f"carousel_{_timestamp()}"
-    paths = editor.create_carousel(
-        image_path=bg_path,
-        slides=slides,
-        output_dir=str(settings.PROCESSED_DIR),
-        basename=base,
-        template_default="educational",
-        logo_path=str(settings.LOGO_PATH),
-    )
-
-    # legenda mais curta para carrossel
-    caption = gemini.write_carousel_caption(
-        topic=title,
-        hook=hook,
-        bullets=bullets,
-    )
-
-    # registra no DB (uma entrada por carrossel, guardando a capa como asset principal)
-    content_id = insert_content_record(
-        content_type="carousel",
-        topic=title,
-        caption=caption,
-        asset_path=paths[0],
-    )
-    logger.info("✅ Carrossel gerado e registrado: %s (id=%s)", paths[0], content_id)
-
-    # (upload de carrossel no Instagram é outro método — se você quiser eu implemento já já)
-    if auto_publish:
-        publisher = InstagramPublisher()
-        publisher.publish_carousel(image_paths=paths, caption=caption)
-        logger.info("✅ Carrossel publicado no Instagram.")
-
-    return paths
-
-
-def _create_short_video_mock_task(topic: str, auto_publish: bool = False) -> str:
-    settings.ensure_directories()
-
+    repo = ContentRepository()
     gemini = GeminiClient()
 
-    ideas = gemini.generate_topic_ideas(topic, count=1)
+    # 1) Gerar ideia
+    ideas = gemini.generate_topic_ideas(niche=topic, count=1)
     idea = ideas[0]
+    topic_text = idea.get("topic", "").strip() or "Tópico sem título"
 
-    script = gemini.write_video_script(topic=idea["topic"], angle=idea.get("angle", ""), hook=idea.get("hook", ""))
-    out = Path(settings.PROCESSED_DIR) / f"video_{_timestamp()}.txt"
+    # 2) Gerar script
+    script_obj = gemini.write_video_script(topic=topic_text, duration_sec=30)
+    script_text = str(script_obj)
 
-    video_path = create_short_video_mock(script=script, output_path=out.as_posix())
+    # Hash
+    content_hash = compute_content_hash(topic=topic_text, caption=script_text)
+    if repo.exists_by_hash(content_hash):
+        logger.warning("⚠️ Vídeo duplicado (hash já existe). Pulando.")
+        return Path("assets/processed/duplicated.txt")
 
-    content_id = insert_content_record(
+    # 3) Gerar mock
+    out_path = settings.PROCESSED_DIR / f"video_{_timestamp()}.txt"
+    video_path = generate_mock_video(script_text=script_text, output_path=out_path)
+
+    # 4) Salvar no DB
+    record = ContentRecord(
         content_type="video_mock",
-        topic=idea["topic"],
-        caption=script,
-        asset_path=video_path,
+        platform="tiktok",
+        topic=topic_text,
+        caption=script_text,
+        asset_path=str(video_path),
+        content_hash=content_hash,
+        status="rendered",
+        metadata_json=repo.to_metadata_json({"idea": idea, "script": script_obj}),
     )
-    logger.info("✅ Vídeo (mock) gerado e registrado: %s (id=%s)", video_path, content_id)
+    content_id = repo.insert(record)
+    logger.info("✅ Vídeo mock gerado e registrado: %s (id=%s)", video_path, content_id)
 
     return video_path
 
@@ -207,15 +138,17 @@ def _create_short_video_mock_task(topic: str, auto_publish: bool = False) -> str
 def run_scheduler() -> None:
     logger.info("🗓️ Scheduler iniciado. Aguardando horários...")
 
-    # Exemplo (ajuste horários depois):
-    schedule.every().day.at("09:00").do(_create_carousel_post, topic="captação de matrículas para faculdades EAD", auto_publish=False)
-    schedule.every().day.at("12:00").do(_create_static_post, topic="captação de matrículas para faculdades EAD", auto_publish=False)
-    schedule.every().day.at("18:00").do(_create_static_post, topic="captação de matrículas para faculdades EAD", auto_publish=False)
+    niche = "captação de matrículas para faculdades EAD"
 
-    # 3 vídeos mock
-    schedule.every().day.at("10:30").do(_create_short_video_mock_task, topic="captação de matrículas para faculdades EAD")
-    schedule.every().day.at("15:30").do(_create_short_video_mock_task, topic="captação de matrículas para faculdades EAD")
-    schedule.every().day.at("20:30").do(_create_short_video_mock_task, topic="captação de matrículas para faculdades EAD")
+    # Posts estáticos
+    schedule.every().day.at("09:00").do(_create_static_post, topic=niche, auto_publish=False)
+    schedule.every().day.at("12:00").do(_create_static_post, topic=niche, auto_publish=False)
+    schedule.every().day.at("18:00").do(_create_static_post, topic=niche, auto_publish=False)
+
+    # Vídeos mock
+    schedule.every().day.at("10:30").do(_create_video_mock, topic=niche)
+    schedule.every().day.at("15:30").do(_create_video_mock, topic=niche)
+    schedule.every().day.at("20:30").do(_create_video_mock, topic=niche)
 
     while True:
         schedule.run_pending()
@@ -223,5 +156,8 @@ def run_scheduler() -> None:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s:%(lineno)d | %(message)s")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(name)s:%(lineno)d | %(message)s"
+    )
     run_scheduler()
