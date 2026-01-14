@@ -174,27 +174,25 @@ class GeminiClient:
 
     def generate_visual_copy(self, topic: str) -> dict[str, Any]:
         """
-        Gera copy ULTRA CURTO para design visual impactante.
-        Inspirado em Estácio, Kroton, Uninter.
+        Gera copy no estilo Estácio: headline com quebras, subheadline curta.
         """
         prompt = (
-            "Você é um designer de posts para Instagram de grandes marcas educacionais.\n"
-            "Crie textos EXTREMAMENTE CURTOS e impactantes.\n\n"
+            "Você é um designer de posts estilo Estácio/Kroton.\n"
+            "Crie textos ultra-curtos e impactantes.\n\n"
             f"Tópico: {topic}\n\n"
             "REGRAS RÍGIDAS:\n"
-            "1. 'title': Máximo 5 palavras. SEM explicações. SEM frases completas. Apenas IMPACTO.\n"
-            "   Exemplos BONS: 'IA na Educação', 'Futuro é Agora', 'Transforme sua IES'\n"
-            "   Exemplos RUINS: 'Agentes de IA para Educação: Simplificando...'\n"
-            "2. 'subtitle': Máximo 8 palavras. Complementa o título.\n"
-            "3. 'kicker': 2-3 palavras de categoria (ex: Tecnologia & Inovação)\n"
-            "4. 'cta': 2-3 palavras (ex: Saiba mais, Fale conosco)\n"
-            "5. 'pexels_query': Termo em INGLÊS que GARANTA foto com PESSOAS (ex: 'happy university students smiling group')\n\n"
+            "1. 'headline': 3-5 palavras divididas em linhas (use \\n para quebrar).\n"
+            "   - TUDO EM CAIXA ALTA\n"
+            "   - 1-2 palavras por linha\n"
+            "   - Exemplo: 'MAIS\\nMATRÍCULAS\\nCOM\\nIA'\n"
+            "2. 'subheadline': 1 frase curta (máx 10 palavras). Sem ponto final.\n"
+            "   - Exemplo: 'Atendimento 24/7 no WhatsApp com agentes inteligentes'\n"
+            "3. 'pexels_query': Termo em INGLÊS com 'copy space left' (espaço vazio à esquerda).\n"
+            "   - Boas queries: 'university student laptop right side', 'customer support headset right'\n\n"
             "Responda SOMENTE em JSON válido:\n"
             '{\n'
-            '  "kicker": "...",\n'
-            '  "title": "...",\n'
-            '  "subtitle": "...",\n'
-            '  "cta": "...",\n'
+            '  "headline": "...",\n'
+            '  "subheadline": "...",\n'
             '  "pexels_query": "..."\n'
             '}'
         )
@@ -204,12 +202,6 @@ class GeminiClient:
 
         if not isinstance(parsed, dict):
             raise RuntimeError("Gemini não retornou dict JSON para visual_copy.")
-        
-        # Valida tamanhos
-        title = parsed.get("title", "")
-        if len(title.split()) > 6:
-            logger.warning("⚠️ Título muito longo (%d palavras), truncando", len(title.split()))
-            parsed["title"] = " ".join(title.split()[:5])
         
         return parsed
     
