@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=1080, height=1350">
     <title>EduFlow IA</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800;900&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -18,25 +18,26 @@
             overflow: hidden;
             font-family: 'Inter', sans-serif;
             position: relative;
-            background: #000;
         }
 
-        /* ===== FOTO DE FUNDO VISÍVEL ===== */
-        .bg-photo {
+        /* ===== FOTO COM EFEITO PUBLICITÁRIO ===== */
+        .background {
             position: absolute;
             width: 100%;
             height: 100%;
             z-index: 0;
         }
 
-        .bg-photo img {
+        .background img {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            filter: brightness(0.85); /* LEVE - mantém foto visível */
+            object-position: center 20%;
+            transform: scale(1.06);
+            filter: blur(3px) brightness(0.65) contrast(1.1) saturate(1.1);
         }
 
-        /* Overlay SUTIL - não mata a foto */
+        /* Overlay para profundidade */
         .overlay {
             position: absolute;
             top: 0;
@@ -45,139 +46,127 @@
             height: 100%;
             background: linear-gradient(
                 180deg,
-                rgba(30, 27, 75, 0.3) 0%,
-                rgba(15, 23, 42, 0.65) 100%
+                rgba(0, 0, 0, 0) 0%,
+                rgba(0, 0, 0, 0.2) 60%,
+                rgba(0, 0, 0, 0.4) 100%
             );
             z-index: 1;
         }
 
-        /* ===== HEADER MINIMALISTA ===== */
+        /* ===== HEADER COLORIDO ===== */
         .header {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
-            height: 90px;
-            background: rgba(30, 27, 75, 0.92);
-            backdrop-filter: blur(8px);
+            height: 85px;
+            background: linear-gradient(135deg, #4338ca 0%, #6366f1 100%);
             z-index: 10;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0 45px;
+            padding: 0 40px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
         }
 
         .brand {
             display: flex;
             align-items: center;
-            gap: 16px;
+            gap: 14px;
         }
 
         .logo {
-            width: 60px;
-            height: 60px;
-            border-radius: 10px;
-            filter: drop-shadow(0 3px 10px rgba(129, 140, 248, 0.5));
+            width: 55px;
+            height: 55px;
+            border-radius: 8px;
         }
 
         .brand-text {
-            font-size: 40px;
+            font-size: 38px;
             font-weight: 900;
             color: #ffffff;
             letter-spacing: -0.5px;
         }
 
-        .brand-text .accent {
-            color: #818cf8;
-        }
-
         .handle {
-            font-size: 22px;
-            font-weight: 600;
-            color: #e0e7ff;
-        }
-
-        /* ===== CARD PODEROSO ===== */
-        .content-card {
-            position: absolute;
-            bottom: 45px;
-            left: 45px;
-            right: 45px;
-            background: rgba(15, 23, 42, 0.94);
-            backdrop-filter: blur(20px) saturate(180%);
-            border-radius: 24px;
-            padding: 44px 48px 50px 48px;
-            z-index: 10;
-            border: 2px solid rgba(129, 140, 248, 0.3);
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
-        }
-
-        /* Linha de luz no topo */
-        .content-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 28px;
-            right: 28px;
-            height: 2px;
-            background: linear-gradient(90deg, transparent, rgba(129, 140, 248, 0.7), transparent);
-        }
-
-        /* Categoria */
-        .kicker {
             font-size: 20px;
             font-weight: 700;
-            color: #818cf8;
-            text-transform: uppercase;
-            letter-spacing: 1.2px;
-            margin-bottom: 16px;
-            text-shadow: 0 2px 8px rgba(129, 140, 248, 0.4);
+            color: #ffffff;
         }
 
-        /* TÍTULO ENORME mas controlado */
+        /* ===== CARD BRANCO ===== */
+        .white-card {
+            position: absolute;
+            bottom: 40px;
+            left: 40px;
+            right: 40px;
+            background: #ffffff;
+            border-radius: 20px;
+            padding: 40px 45px;
+            z-index: 10;
+            box-shadow: 0 25px 70px rgba(0, 0, 0, 0.4);
+        }
+
+        .kicker {
+            font-size: 18px;
+            font-weight: 800;
+            color: #6366f1;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 14px;
+        }
+
+        /* TÍTULO GIGANTE COM IMPACTO */
         .title {
-            font-size: 78px;
+            font-size: 92px;
             font-weight: 900;
-            color: #ffffff;
+            color: #0f172a;
             line-height: 0.95;
             margin-bottom: 20px;
-            text-shadow: 
-                0 4px 20px rgba(0, 0, 0, 0.9),
-                0 0 40px rgba(129, 140, 248, 0.25);
-            letter-spacing: -1.5px;
-            word-wrap: break-word;
-            hyphens: none;
+            letter-spacing: -1.2px;
+            text-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
         }
 
-        /* Subtítulo claro */
         .subtitle {
-            font-size: 34px;
+            font-size: 32px;
             font-weight: 600;
-            color: #e7e9ff;
-            line-height: 1.3;
-            margin-bottom: 26px;
-            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+            color: #334155;
+            line-height: 1.25;
+            margin-bottom: 24px;
         }
 
-        /* CTA com destaque */
-        .cta-button {
+        /* ===== HIGHLIGHT BOX (ESTILO ESTÁCIO) ===== */
+        .highlight-box {
+            margin-top: 18px;
+            display: inline-block;
+            background: #0038FF;
+            color: #ffffff;
+            padding: 16px 24px;
+            border-radius: 14px;
+            font-size: 28px;
+            font-weight: 800;
+            transform: rotate(-2deg);
+            box-shadow: 10px 10px 0 rgba(99, 102, 241, 0.2);
+            margin-bottom: 24px;
+        }
+
+        .cta {
             display: inline-flex;
             align-items: center;
-            gap: 10px;
-            padding: 16px 32px;
-            background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
-            border-radius: 14px;
-            font-size: 26px;
+            gap: 8px;
+            padding: 14px 28px;
+            background: #6366f1;
+            border-radius: 12px;
+            font-size: 24px;
             font-weight: 700;
             color: #ffffff;
-            box-shadow: 0 8px 24px rgba(99, 102, 241, 0.45);
-            text-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.35);
         }
     </style>
 </head>
 <body>
     <!-- Foto de Fundo -->
-    <div class="bg-photo">
+    <div class="background">
         <img src="{{ background_url }}" alt="Background">
     </div>
     <div class="overlay"></div>
@@ -188,19 +177,23 @@
             {% if logo_url %}
             <img src="{{ logo_url }}" class="logo" alt="Logo">
             {% endif %}
-            <div class="brand-text">
-                EduFlow<span class="accent">IA</span>
-            </div>
+            <div class="brand-text">EduFlowIA</div>
         </div>
         <div class="handle">{{ ig_handle }}</div>
     </div>
 
-    <!-- Card de Conteúdo -->
-    <div class="content-card">
+    <!-- Card BRANCO -->
+    <div class="white-card">
         <div class="kicker">{{ kicker }}</div>
         <div class="title">{{ title }}</div>
         <div class="subtitle">{{ subtitle }}</div>
-        <div class="cta-button">👉 {{ cta }}</div>
+        
+        <!-- Highlight Box Estilo Estácio -->
+        <div class="highlight-box">
+            Atendimento 24/7 com IA no WhatsApp
+        </div>
+        
+        <div class="cta">👉 {{ cta }}</div>
     </div>
 </body>
 </html>

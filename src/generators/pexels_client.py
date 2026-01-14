@@ -134,17 +134,19 @@ class PexelsClient:
 
     def _choose_best(self, photos: list[PexelsPhoto]) -> Optional[PexelsPhoto]:
         """
-        Prioriza imagens grandes (bom pra crop/blur e aparência premium).
+        Pexels retorna ordenado por relevância.
+        Primeira foto = melhor match com a query.
         """
-        # filtra algo razoável pra IG 1080x1350
+        if not photos:
+            return None
+
+        # Filtra por tamanho adequado
         good = [p for p in photos if p.width >= 1200 and p.height >= 1600]
         if good:
-            return random.choice(good)
+            return good[0]  # ✅ PRIMEIRA (mais relevante)
 
-        # fallback
-        sorted_photos = sorted(photos, key=lambda p: (p.height * p.width), reverse=True)
-        return sorted_photos[0] if sorted_photos else None
-
+        # Fallback: primeira mesmo assim
+        return photos[0]
     @retry(
         reraise=True,
         stop=stop_after_attempt(3),

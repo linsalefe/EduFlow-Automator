@@ -17,6 +17,32 @@ from src.processors.html_renderer import HtmlRenderer
 logger = logging.getLogger("eduflow.main_html")
 
 
+def refine_pexels_query(topic: str, fallback: str) -> str:
+    """
+    Refina query do Pexels por contexto do tema.
+    Garante fotos mais relevantes.
+    """
+    t = topic.lower()
+
+    # Atendimento/Suporte
+    if any(word in t for word in ["atendimento", "suporte", "secretaria", "chat"]):
+        return "university student support advisor office laptop smiling"
+
+    # Captação/Matrículas
+    if any(word in t for word in ["matrícula", "captação", "leads", "recrutamento"]):
+        return "university admissions counselor meeting laptop professional"
+
+    # WhatsApp/Chatbot/IA
+    if any(word in t for word in ["whatsapp", "chatbot", "ia", "inteligência artificial", "agente"]):
+        return "customer support chatbot smartphone business professional"
+
+    # Educação/Ensino
+    if any(word in t for word in ["educação", "ensino", "estudante", "aluno"]):
+        return "happy university students studying laptop modern diverse"
+
+    return fallback
+
+
 async def generate_one_html_post(niche: str, platform: str = "instagram") -> Path:
     """
     Pipeline HTML/CSS para posts profissionais.
@@ -52,9 +78,11 @@ async def generate_one_html_post(niche: str, platform: str = "instagram") -> Pat
         else:
             full_caption = caption
 
-        # 4) Buscar imagem de fundo no Pexels
+        # 4) Buscar imagem de fundo no Pexels (✅ COM REFINAMENTO)
         logger.info("📸 Buscando imagem no Pexels...")
-        pexels_query = visual.get("pexels_query", "professional business meeting")
+        pexels_query_raw = visual.get("pexels_query", "professional business meeting")
+        pexels_query = refine_pexels_query(topic, pexels_query_raw)
+        logger.info("📸 Query Pexels refinada: %s", pexels_query)
         bg_path = pexels.get_background_for_query(pexels_query)
         
         # Se não achou no Pexels, usa gradiente (fallback)
