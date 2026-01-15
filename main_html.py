@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import base64
 from datetime import datetime
 from pathlib import Path
 
@@ -16,57 +17,53 @@ from src.processors.html_renderer import HtmlRenderer
 
 logger = logging.getLogger("eduflow.main_html")
 
-
 GENERIC_PEXELS = {
-    "professional business meeting",
-    "business meeting",
-    "office meeting",
-    "office",
-    "meeting",
-    "business",
+    "professional business meeting", "business meeting", "office meeting",
+    "office", "meeting", "business",
 }
 
 
+def image_to_base64(path: Path) -> str | None:
+    """Converte imagem local para Base64 para embutir no HTML."""
+    if not path.exists():
+        logger.warning(f"⚠️ Imagem não encontrada para Base64: {path}")
+        return None
+    try:
+        with open(path, "rb") as img:
+            encoded = base64.b64encode(img.read()).decode('utf-8')
+        return f"data:image/png;base64,{encoded}"
+    except Exception as e:
+        logger.error(f"Erro ao converter imagem: {e}")
+        return None
+
+
+def calculate_font_size_class(text: str) -> str:
+    """Define a classe CSS baseada no tamanho do texto."""
+    length = len(text)
+    if length < 15: return "text-xl"
+    if length < 25: return "text-lg"
+    if length < 50: return "text-md"
+    return "text-sm"
+
+
 def normalize_headline(headline: str) -> str:
-    """Garante caixa alta + quebra em linhas se vier tudo em uma linha."""
-    text = (headline or "").strip().upper()
-
-    if "\n" in text:
-        return text
-
-    # fallback: quebra 1-2 palavras por linha
-    words = [w for w in text.split() if w]
-    lines = []
-    i = 0
-    while i < len(words):
-        chunk = words[i : i + 2]
-        lines.append(" ".join(chunk))
-        i += 2
-
-    # limita a 5 linhas (Estácio-like)
-    return "\n".join(lines[:5])
+    """Garante caixa alta e remove espaços extras."""
+    return (headline or "").strip().upper()
 
 
 def normalize_subheadline(sub: str) -> str:
     s = (sub or "").strip()
-    # sem ponto final
     if s.endswith("."):
         s = s[:-1].strip()
     return s
 
 
 def refine_pexels_query(topic: str, fallback: str) -> str:
-    """
-    Usa a query do Gemini como base (fallback) e só reforça composição:
-    - assunto à direita
-    - copy space à esquerda
-    - vibe educação + IA
-    """
+    """Otimiza a busca no Pexels para garantir imagens 'Business/Tech'."""
     t = (topic or "").lower().strip()
     base = (fallback or "").strip()
 
     if not base or base.lower() in GENERIC_PEXELS or len(base.split()) < 3:
-        # base por tema (bem mais "IA + educação")
         if any(w in t for w in ["matrícula", "captação", "leads", "recrutamento"]):
             base = "university admissions office counselor laptop"
         elif any(w in t for w in ["atendimento", "suporte", "secretaria", "chat"]):
@@ -76,20 +73,12 @@ def refine_pexels_query(topic: str, fallback: str) -> str:
         else:
             base = "university student laptop technology"
 
-    # reforços de composição (Pexels entende muito bem esses termos)
-    must_have = [
-        "right side",
-        "copy space left",
-        "vertical",
-        "shallow depth of field",
-        "cinematic lighting",
-    ]
+    must_have = ["right side", "copy space left", "vertical", "cinematic lighting", "office"]
     q = base
     q_low = q.lower()
     for tok in must_have:
         if tok not in q_low:
             q += f" {tok}"
-
     return q.strip()
 
 
@@ -113,7 +102,7 @@ async def generate_one_html_post(niche: str, platform: str = "instagram") -> Pat
         logger.info("🎨 Criando copy visual...")
         visual = llm.generate_visual_copy(topic=topic)
 
-        headline = normalize_headline(visual.get("headline", "MAIS\nMATRÍCULAS\nCOM\nIA"))
+        headline = normalize_headline(visual.get("headline", "MAIS MATRÍCULAS\nCOM IA"))
         subheadline = normalize_subheadline(
             visual.get("subheadline", "Atendimento 24/7 no WhatsApp com agentes inteligentes")
         )
@@ -130,43 +119,27 @@ async def generate_one_html_post(niche: str, platform: str = "instagram") -> Pat
         else:
             full_caption = caption
 
-        # 4) Fundo (Pexels) — agora com múltiplas tentativas
+        # 4) Fundo (Pexels)
         logger.info("📸 Buscando imagem no Pexels...")
-        pexels_query_raw = (visual.get("pexels_query") or "").strip() or "university student laptop"
-        pexels_query = refine_pexels_query(topic, pexels_query_raw)
-        logger.info("📸 Query Pexels (refinada): %s", pexels_query)
-
-        # Múltiplas tentativas
-        attempts = [
-            pexels_query,
-            pexels_query.replace("student using smartphone whatsapp chat", "student using laptop"),
-            "university admissions office laptop right side copy space left vertical",
-            "student services office headset right side copy space left vertical",
-        ]
-
+        pexels_query = refine_pexels_query(topic, visual.get("pexels_query") or "")
+        
         bg_path = None
-        for q in attempts:
-            logger.info("📸 Tentando: %s", q)
-            candidate = pexels.get_background_for_query(q)
-            if candidate and candidate.exists():
-                bg_path = candidate
-                logger.info("✅ Imagem encontrada!")
-                break
-
+        candidate = pexels.get_background_for_query(pexels_query)
+        if candidate and candidate.exists():
+            bg_path = candidate
+        
         if bg_path and bg_path.exists():
             bg_url = f"file://{bg_path.resolve()}"
         else:
-            logger.warning("⚠️ Pexels não retornou imagem, usando gradiente")
-            bg_url = (
-                "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1080' height='1350'%3E"
-                "%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E"
-                "%3Cstop offset='0%25' style='stop-color:%231e1b4b'/%3E"
-                "%3Cstop offset='100%25' style='stop-color:%234338ca'/%3E"
-                "%3C/linearGradient%3E%3C/defs%3E"
-                "%3Crect width='1080' height='1350' fill='url(%23g)'/%3E%3C/svg%3E"
-            )
+            bg_url = "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1080&q=80"
 
-        # 5) Render
+        # 5) Assets (Logo e Tamanho de Fonte)
+        logo_path_local = Path("assets/brand/lodo_sem_fundo.png")
+        logo_b64 = image_to_base64(logo_path_local)
+        
+        size_class = calculate_font_size_class(headline)
+
+        # 6) Render (AGORA COM WIDTH/HEIGHT)
         logger.info("🖼️ Renderizando HTML para imagem...")
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         out_path = settings.PROCESSED_DIR / f"post_html_{ts}.jpg"
@@ -175,16 +148,20 @@ async def generate_one_html_post(niche: str, platform: str = "instagram") -> Pat
             "headline": headline,
             "subheadline": subheadline,
             "imagem_fundo": bg_url,
+            "classe_tamanho_texto": size_class,
+            "logo_path": logo_b64,
         }
 
         await renderer.render_post(
-            template_name="post_estacio_like.html",
+            template_name="post_estacio.html",
             data=template_data,
             output_path=out_path,
+            width=1080,   # <--- GARANTINDO 1080x1080
+            height=1080,  # <--- GARANTINDO 1080x1080
             quality=98,
         )
 
-        # 6) Salvar no banco
+        # 7) Salvar no banco
         logger.info("💾 Salvando no banco de dados...")
         metadata = {"idea": idea, "visual": visual, "caption_obj": caption_obj, "render_method": "html"}
 
@@ -200,8 +177,7 @@ async def generate_one_html_post(niche: str, platform: str = "instagram") -> Pat
         )
         repo.insert(record)
 
-        logger.info("✅ Post HTML gerado com sucesso!")
-        logger.info("📁 Arquivo: %s", out_path)
+        logger.info("✅ Post HTML gerado com sucesso: %s", out_path)
         return out_path
 
     except ContentDuplicateError as exc:
@@ -215,7 +191,7 @@ async def generate_one_html_post(niche: str, platform: str = "instagram") -> Pat
 def main() -> None:
     setup_logging(level="INFO")
     settings.ensure_directories()
-
+    
     try:
         niche = "como agentes de IA podem ajudar instituições de ensino a melhorar atendimento e captação de alunos"
         asyncio.run(generate_one_html_post(niche=niche, platform="instagram"))

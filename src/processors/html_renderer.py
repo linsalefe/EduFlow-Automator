@@ -26,9 +26,13 @@ def _file_to_data_uri(file_path: Path) -> str:
     if not mime:
         mime = "application/octet-stream"
 
-    data = file_path.read_bytes()
-    b64 = base64.b64encode(data).decode("utf-8")
-    return f"data:{mime};base64,{b64}"
+    try:
+        data = file_path.read_bytes()
+        b64 = base64.b64encode(data).decode("utf-8")
+        return f"data:{mime};base64,{b64}"
+    except Exception as e:
+        logger.error(f"Erro ao ler arquivo para base64: {file_path} - {e}")
+        return ""
 
 
 def _inline_file_src(html: str) -> str:
@@ -36,14 +40,19 @@ def _inline_file_src(html: str) -> str:
 
     def repl(match: re.Match) -> str:
         raw_path = match.group(1)
-        p = Path(raw_path)
+        # Remove file:// se estiver duplicado ou mal formatado e cria Path
+        clean_path = raw_path.replace("file://", "")
+        p = Path(clean_path)
 
         if not p.exists():
-            logger.warning("⚠️ Arquivo local não encontrado: %s", p)
-            return match.group(0)
+            logger.warning("⚠️ Arquivo local não encontrado para inline: %s", p)
+            return match.group(0) # Retorna original se falhar
 
-        logger.info("📎 Convertendo para base64: %s", p.name)
-        return f'src="{_file_to_data_uri(p)}"'
+        # logger.info("📎 Convertendo para base64: %s", p.name)
+        data_uri = _file_to_data_uri(p)
+        if data_uri:
+            return f'src="{data_uri}"'
+        return match.group(0)
 
     return _FILE_SRC_RE.sub(repl, html)
 
@@ -51,16 +60,20 @@ def _inline_file_src(html: str) -> str:
 class HtmlRenderer:
     """
     Renderiza posts usando HTML/CSS via Playwright.
-    Converte file:// para base64 automaticamente.
+    Converte file:// para base64 automaticamente para evitar erros de CORS/Path.
     """
 
     def __init__(self, templates_dir: Path | str = None) -> None:
         if templates_dir is None:
-            templates_dir = settings.PROJECT_ROOT / "src" / "templates"
+            # Garante que pega do settings ou usa padrão relativo
+            root = getattr(settings, "PROJECT_ROOT", Path.cwd())
+            templates_dir = root / "src" / "templates"
 
         self.templates_dir = Path(templates_dir)
         if not self.templates_dir.exists():
-            raise RuntimeError(f"Pasta de templates não existe: {self.templates_dir}")
+            # Cria a pasta se não existir para evitar crash imediato
+            logger.warning(f"Pasta de templates não encontrada: {self.templates_dir}. Criando...")
+            self.templates_dir.mkdir(parents=True, exist_ok=True)
 
         self.env = Environment(loader=FileSystemLoader(str(self.templates_dir)))
         logger.info("✅ HtmlRenderer inicializado (templates: %s)", self.templates_dir)
@@ -71,53 +84,67 @@ class HtmlRenderer:
         data: dict[str, Any],
         output_path: Path | str,
         width: int = 1080,
-        height: int = 1350,
+        height: int = 1080, # Padrão quadrado, mas aceita mudança
         quality: int = 95,
     ) -> Path:
         """
         Renderiza template HTML em imagem JPG.
-        Converte automaticamente file:// para base64.
+        
+        Args:
+            template_name: Nome do arquivo .html em src/templates
+            data: Dicionário com variáveis para o Jinja2
+            output_path: Onde salvar o JPG
+            width: Largura da viewport
+            height: Altura da viewport
+            quality: Qualidade do JPG (0-100)
         """
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # 1) Renderizar template
-        logger.info("📝 Renderizando template: %s", template_name)
-        template = self.env.get_template(template_name)
-        html_content = template.render(**data)
+        # 1) Renderizar template (Jinja2)
+        logger.info("📝 Processando template: %s", template_name)
+        try:
+            template = self.env.get_template(template_name)
+            html_content = template.render(**data)
+        except Exception as e:
+            logger.error(f"❌ Erro ao processar Jinja2 template: {e}")
+            raise
 
-        # 2) ✅ FIX: Converter file:// para base64
+        # 2) Converter file:// para base64 (Fix para Playwright)
         html_content = _inline_file_src(html_content)
 
-        # 3) Converter para imagem
-        logger.info("🎨 Convertendo HTML para imagem...")
+        # 3) Renderizar no Navegador (Playwright)
+        logger.info("🎨 Renderizando pixels...")
         async with async_playwright() as p:
+            # Lança browser
             browser = await p.chromium.launch(headless=True)
+            
+            # Configura página com Scale Factor alto para nitidez (Retina like)
             page = await browser.new_page(
                 viewport={"width": width, "height": height},
-                device_scale_factor=3,  # ✅ Aumenta ainda mais a nitidez
+                device_scale_factor=2, # 2 ou 3 melhora muito a qualidade do texto
             )
 
             # Carrega HTML
             await page.set_content(html_content, wait_until="networkidle")
 
-            # Aguarda fontes e imagens
-            await page.evaluate("document.fonts && document.fonts.ready")
-            await page.wait_for_timeout(500)
+            # Garante que fontes carregaram
+            try:
+                await page.evaluate("document.fonts.ready")
+            except Exception:
+                pass
 
             # Screenshot
             await page.screenshot(
                 path=str(output_path),
                 type="jpeg",
-                quality=98,  # ✅ Qualidade fixa no máximo prático
+                quality=quality,
                 full_page=False,
             )
 
             await browser.close()
 
-        logger.info(
-            "✅ Imagem gerada: %s (%.1f KB)",
-            output_path,
-            output_path.stat().st_size / 1024,
-        )
+        size_kb = output_path.stat().st_size / 1024
+        logger.info(f"✅ Imagem salva: {output_path.name} ({size_kb:.1f} KB)")
+        
         return output_path
