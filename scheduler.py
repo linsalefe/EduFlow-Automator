@@ -1,163 +1,141 @@
 # scheduler.py
+"""
+Scheduler do EduFlow Automator.
+Gera e publica posts automaticamente a cada 2 horas, 24/7.
+"""
+
 from __future__ import annotations
 
+import asyncio
 import logging
+import random
+import time
 from datetime import datetime
-from pathlib import Path
 
 import schedule
-import time
 
 from config import settings
-from database.repository import ContentRepository, ContentRecord, compute_content_hash
-from src.generators.gemini_client import GeminiClient
-from src.generators.pexels_client import PexelsClient
-from src.processors.image_editor import ImageEditor
-from src.processors.video_editor import generate_mock_video
-from src.publishers.instagram_api import InstagramPublisher
+from config.logging_config import setup_logging
+from main_html import generate_and_publish
 
 logger = logging.getLogger("eduflow.scheduler")
 
 
-def _timestamp() -> str:
-    return datetime.now().strftime("%Y%m%d_%H%M%S")
+# ============================================================
+# CONFIGURAÇÃO
+# ============================================================
+
+# Intervalo entre posts (em minutos para teste)
+POST_INTERVAL_MINUTES = 5
+
+# Nichos para variar o conteúdo
+NICHOS = [
+    "conversão de leads em matrículas para faculdades",
+    "atendimento automatizado 24/7 para instituições de ensino",
+    "como IA ajuda equipes comerciais de faculdades",
+    "qualificação automática de leads educacionais",
+    "follow-up inteligente para recuperar leads frios",
+    "integração de IA com CRM para escolas",
+    "redução de tempo de resposta em secretarias acadêmicas",
+    "como não perder leads fora do horário comercial",
+    "automação do atendimento via WhatsApp para cursos",
+    "resultados reais de IA na educação",
+]
 
 
-def _create_static_post(topic: str, auto_publish: bool = False) -> Path:
-    settings.ensure_directories()
+# ============================================================
+# JOB PRINCIPAL
+# ============================================================
 
-    repo = ContentRepository()
-    gemini = GeminiClient()
-    editor = ImageEditor()
-    pexels = PexelsClient()
-
-    # 1) Gerar ideia
-    ideas = gemini.generate_topic_ideas(niche=topic, count=1)
-    idea = ideas[0]
-    topic_text = idea.get("topic", "").strip() or "Tópico sem título"
-
-    # 2) Gerar legenda
-    caption_obj = gemini.write_post_caption(topic=topic_text)
-    title = (caption_obj.get("title") or topic_text).strip()
-    caption = (caption_obj.get("caption") or "").strip()
-    hashtags = caption_obj.get("hashtags") or []
-
-    if isinstance(hashtags, list) and hashtags:
-        hashtags_str = " ".join([h if h.startswith("#") else f"#{h}" for h in hashtags])
-        full_caption = f"{caption}\n\n{hashtags_str}".strip()
-    else:
-        full_caption = caption
-
-    # Hash para evitar duplicatas
-    content_hash = compute_content_hash(topic=topic_text, caption=full_caption)
-    if repo.exists_by_hash(content_hash):
-        logger.warning("⚠️ Conteúdo duplicado (hash já existe). Pulando.")
-        return Path("assets/processed/duplicated.jpg")
-
-    # 3) Background Pexels
-    bg_path = pexels.get_background_for_query("university students studying laptop modern")
-
-    # 4) Gerar imagem
-    out_path = settings.PROCESSED_DIR / f"post_{_timestamp()}.jpg"
-    image_path = editor.create_post(
-        title=title,
-        subtitle=idea.get("hook", ""),
-        kicker=idea.get("angle", "Educação & Carreira"),
-        background_path=bg_path,
-        output_path=out_path,
-        template="estacio_like",
-        add_logo=True,
-    )
-
-    # 5) Salvar no DB
-    record = ContentRecord(
-        content_type="post",
-        platform="instagram",
-        topic=topic_text,
-        caption=full_caption,
-        asset_path=str(image_path),
-        content_hash=content_hash,
-        status="rendered",
-        metadata_json=repo.to_metadata_json({"idea": idea, "caption_obj": caption_obj}),
-    )
-    content_id = repo.insert(record)
-    logger.info("✅ Post gerado e registrado: %s (id=%s)", image_path, content_id)
-
-    # 6) Publicar (opcional)
-    if auto_publish:
-        publisher = InstagramPublisher()
-        media_id = publisher.publish_photo(image_path=image_path, caption=full_caption)
-        repo.mark_published(content_hash, platform_id=media_id, platform="instagram")
-        logger.info("✅ Publicado no Instagram (media_id=%s)", media_id)
-
-    return image_path
+def job_generate_and_publish():
+    """Job que gera e publica um post."""
+    logger.info("=" * 60)
+    logger.info(f"⏰ Scheduler executando - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info("=" * 60)
+    
+    # Seleciona nicho aleatório para variar conteúdo
+    niche = random.choice(NICHOS)
+    logger.info(f"📌 Nicho selecionado: {niche}")
+    
+    # Tenta até 3 vezes (caso gere duplicado)
+    max_attempts = 3
+    for attempt in range(1, max_attempts + 1):
+        try:
+            success = asyncio.run(generate_and_publish(niche=niche))
+            
+            if success:
+                logger.info("✅ Post publicado com sucesso!")
+                return
+            else:
+                logger.warning(f"⚠️ Tentativa {attempt}/{max_attempts} falhou, tentando novamente...")
+                # Muda o nicho para próxima tentativa
+                niche = random.choice(NICHOS)
+                time.sleep(5)
+                
+        except Exception as exc:
+            logger.exception(f"❌ Erro na tentativa {attempt}: {exc}")
+            time.sleep(10)
+    
+    logger.error("❌ Todas as tentativas falharam")
 
 
-def _create_video_mock(topic: str) -> Path:
-    settings.ensure_directories()
-
-    repo = ContentRepository()
-    gemini = GeminiClient()
-
-    # 1) Gerar ideia
-    ideas = gemini.generate_topic_ideas(niche=topic, count=1)
-    idea = ideas[0]
-    topic_text = idea.get("topic", "").strip() or "Tópico sem título"
-
-    # 2) Gerar script
-    script_obj = gemini.write_video_script(topic=topic_text, duration_sec=30)
-    script_text = str(script_obj)
-
-    # Hash
-    content_hash = compute_content_hash(topic=topic_text, caption=script_text)
-    if repo.exists_by_hash(content_hash):
-        logger.warning("⚠️ Vídeo duplicado (hash já existe). Pulando.")
-        return Path("assets/processed/duplicated.txt")
-
-    # 3) Gerar mock
-    out_path = settings.PROCESSED_DIR / f"video_{_timestamp()}.txt"
-    video_path = generate_mock_video(script_text=script_text, output_path=out_path)
-
-    # 4) Salvar no DB
-    record = ContentRecord(
-        content_type="video_mock",
-        platform="tiktok",
-        topic=topic_text,
-        caption=script_text,
-        asset_path=str(video_path),
-        content_hash=content_hash,
-        status="rendered",
-        metadata_json=repo.to_metadata_json({"idea": idea, "script": script_obj}),
-    )
-    content_id = repo.insert(record)
-    logger.info("✅ Vídeo mock gerado e registrado: %s (id=%s)", video_path, content_id)
-
-    return video_path
+def job_health_check():
+    """Log de health check a cada hora."""
+    logger.info(f"💓 Health check - Sistema rodando - {datetime.now().strftime('%H:%M')}")
 
 
-def run_scheduler() -> None:
-    logger.info("🗓️ Scheduler iniciado. Aguardando horários...")
+# ============================================================
+# SCHEDULER
+# ============================================================
 
-    niche = "captação de matrículas para faculdades EAD"
-
-    # Posts estáticos
-    schedule.every().day.at("09:00").do(_create_static_post, topic=niche, auto_publish=False)
-    schedule.every().day.at("12:00").do(_create_static_post, topic=niche, auto_publish=False)
-    schedule.every().day.at("18:00").do(_create_static_post, topic=niche, auto_publish=False)
-
-    # Vídeos mock
-    schedule.every().day.at("10:30").do(_create_video_mock, topic=niche)
-    schedule.every().day.at("15:30").do(_create_video_mock, topic=niche)
-    schedule.every().day.at("20:30").do(_create_video_mock, topic=niche)
-
+def run_scheduler():
+    """Inicia o scheduler 24/7."""
+    logger.info("=" * 60)
+    logger.info("🚀 EDUFLOW AUTOMATOR - SCHEDULER INICIADO")
+    logger.info(f"📅 Intervalo: 1 post a cada {POST_INTERVAL_MINUTES} minutos")
+    logger.info(f"🕐 Iniciado em: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info("=" * 60)
+    
+    # Agenda posts a cada 2 horas
+    schedule.every(POST_INTERVAL_MINUTES).minutes.do(job_generate_and_publish)
+    
+    # Health check a cada hora
+    schedule.every(1).hours.do(job_health_check)
+    
+    # Executa primeiro post imediatamente
+    logger.info("🎬 Executando primeiro post agora...")
+    job_generate_and_publish()
+    
+    # Loop infinito
+    logger.info(f"⏳ Próximo post em {POST_INTERVAL_MINUTES} minutos...")
     while True:
         schedule.run_pending()
-        time.sleep(1)
+        time.sleep(60)  # Checa a cada minuto
 
+
+# ============================================================
+# MODO MANUAL (para testes)
+# ============================================================
+
+def run_once():
+    """Executa apenas uma vez (para teste)."""
+    logger.info("🧪 Modo de teste - executando uma vez")
+    job_generate_and_publish()
+
+
+# ============================================================
+# ENTRY POINT
+# ============================================================
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s | %(levelname)s | %(name)s:%(lineno)d | %(message)s"
-    )
-    run_scheduler()
+    setup_logging(level="INFO")
+    settings.ensure_directories()
+    
+    import sys
+    
+    if len(sys.argv) > 1 and sys.argv[1] == "--once":
+        # Modo teste: python scheduler.py --once
+        run_once()
+    else:
+        # Modo produção: python scheduler.py
+        run_scheduler()
